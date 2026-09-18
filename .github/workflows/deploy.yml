@@ -1,4 +1,4 @@
-name: Project P5
+name: p5
 on:
   push:
     branches:
