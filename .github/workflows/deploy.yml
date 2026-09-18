@@ -36,8 +36,3 @@ jobs:
           accountId: ${{ secrets.ACCOUNT_ID }}
       
 
-
-    #   - name: Install Wrangler
-    #     run: npm install -g wrangler
-    #   - name: Publish to Cloudflare Workers
-    #     run: wrangler publish
