@@ -1,0 +1,10 @@
+
+{
+    "name": "p5",
+    "main":"src/index.ts",
+    "compatibility": "2026-08-14",
+    "observability": {
+        "enable": true
+    }
+
+}
