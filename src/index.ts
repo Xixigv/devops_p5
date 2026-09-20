@@ -19,8 +19,14 @@ export default {
 				return new Response('Hello, World!');
 			case '/random':
 				return new Response(crypto.randomUUID());
+			case '/health':
+				return Response.json({
+					status: 'ok',
+					timestamp: new Date().toISOString(),
+				});
 			default:
 				return new Response('Not Found', { status: 404 });
 		}
 	},
 } satisfies ExportedHandler<Env>;
+
