@@ -17,7 +17,14 @@
 	"observability": {
 		"enabled": true
 	},
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	"d1_databases": [
+		{
+			"binding": "p6",
+			"database_name": "practica",
+			"database_id" : "61dec16b-e756-4828-9b63-3d1e3e7c6c02"
+		}
+	],
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
