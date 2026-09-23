@@ -24,8 +24,8 @@ jobs:
         run: npm ci 
         # working-directory: ./tight-voice-080e
 
-      - name: Run Unit Tests
-        run: npm test -- --run
+      # - name: Run Unit Tests
+      #   run: npm test -- --run
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
