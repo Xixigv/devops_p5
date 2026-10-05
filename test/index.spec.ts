@@ -1,54 +1,82 @@
-import {
-	env,
-	createExecutionContext,
-	waitOnExecutionContext,
-	SELF,
-} from "cloudflare:test";
-import { describe, it, expect } from "vitest";
-import worker from "../src";
+import { describe, it, expect, vi } from "vitest";
+import worker from "../src/index";
 
-describe("Hello World user worker", () => {
-	describe("request for /message", () => {
-		it('/ responds with "Hello, World!" (unit style)', async () => {
-			const request = new Request<unknown, IncomingRequestCfProperties>(
-				"http://example.com/message"
-			);
-			// Create an empty context to pass to `worker.fetch()`.
-			const ctx = createExecutionContext();
-			const response = await worker.fetch(request, env, ctx);
-			// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
-			await waitOnExecutionContext(ctx);
-			expect(await response.text()).toMatchInlineSnapshot(`"Hello, World!"`);
-		});
+const ctx = {
+  waitUntil: () => {},
+  passThroughOnException: () => {},
+} as unknown as ExecutionContext;
 
-		it('responds with "Hello, World!" (integration style)', async () => {
-			const request = new Request("http://example.com/message");
-			const response = await SELF.fetch(request);
-			expect(await response.text()).toMatchInlineSnapshot(`"Hello, World!"`);
-		});
-	});
+function createMockDb(results: unknown[]) {
+  const all = vi.fn().mockResolvedValue({ results });
+  const prepare = vi.fn().mockReturnValue({ all });
+  return { db: { prepare } as unknown as D1Database, prepare, all };
+}
 
-	describe("request for /random", () => {
-		it("/ responds with a random UUID (unit style)", async () => {
-			const request = new Request<unknown, IncomingRequestCfProperties>(
-				"http://example.com/random"
-			);
-			// Create an empty context to pass to `worker.fetch()`.
-			const ctx = createExecutionContext();
-			const response = await worker.fetch(request, env, ctx);
-			// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
-			await waitOnExecutionContext(ctx);
-			expect(await response.text()).toMatch(
-				/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/
-			);
-		});
+describe("Worker fetch handler", () => {
+  it("responde con status 200 y JSON", async () => {
+    const { db } = createMockDb([]);
+    const request = new Request("http://example.com/");
 
-		it("responds with a random UUID (integration style)", async () => {
-			const request = new Request("http://example.com/random");
-			const response = await SELF.fetch(request);
-			expect(await response.text()).toMatch(
-				/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/
-			);
-		});
-	});
+    const response = await worker.fetch!(request as any, { p6: db }, ctx);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+  });
+
+  it("incluye el mensaje esperado", async () => {
+    const { db } = createMockDb([]);
+    const request = new Request("http://example.com/");
+
+    const response = await worker.fetch!(request as any, { p6: db }, ctx);
+    const body = (await response.json()) as { message: string };
+
+    expect(body.message).toBe("Hello, World! 3");
+  });
+
+  it("devuelve los usuarios que regresa la base de datos", async () => {
+    const users = [
+      { id: 1, name: "Ana" },
+      { id: 2, name: "Luis" },
+    ];
+    const { db } = createMockDb(users);
+    const request = new Request("http://example.com/");
+
+    const response = await worker.fetch!(request as any, { p6: db }, ctx);
+    const body = (await response.json()) as { dbData: unknown[] };
+
+    expect(body.dbData).toEqual(users);
+  });
+
+  it("consulta la tabla users", async () => {
+    const { db, prepare, all } = createMockDb([]);
+    const request = new Request("http://example.com/");
+
+    await worker.fetch!(request as any, { p6: db }, ctx);
+
+    expect(prepare).toHaveBeenCalledWith("SELECT * FROM users");
+    expect(all).toHaveBeenCalledTimes(1);
+  });
+
+  it("devuelve una lista vacía si no hay usuarios", async () => {
+    const { db } = createMockDb([]);
+    const request = new Request("http://example.com/");
+
+    const response = await worker.fetch!(request as any, { p6: db }, ctx);
+    const body = (await response.json()) as { dbData: unknown[] };
+
+    expect(body.dbData).toEqual([]);
+  });
+
+  it("falla si la base de datos lanza un error", async () => {
+    const db = {
+      prepare: vi.fn().mockReturnValue({
+        all: vi.fn().mockRejectedValue(new Error("DB error")),
+      }),
+    } as unknown as D1Database;
+    const request = new Request("http://example.com/");
+
+    await expect(
+      worker.fetch!(request as any, { p6: db }, ctx),
+    ).rejects.toThrow("DB error");
+  });
 });

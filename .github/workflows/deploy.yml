@@ -1,37 +1,72 @@
 name: p5
+
 on:
   push:
     branches:
       - main
- 
-jobs: 
-  deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+  workflow_dispatch:
 
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout 
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: npm ci 
-        # working-directory: ./tight-voice-080e
+        run: npm ci
 
-      # - name: Run Unit Tests
-      #   run: npm test -- --run
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
 
-      - name: Deploy to Cloudflare Workers
+      - name: Build
+        run: npm run build
+
+      - name: Upload coverage report (UAT)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage
+          retention-days: 14
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 14
+
+  deploy-prod:
+    name: Deploy to Cloudflare (Prod)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    environment:
+      name: production
+      url: https://tight-voice-080e-prod.ximena-villareal.workers.dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Cloudflare Workers (Prod)
         uses: cloudflare/wrangler-action@v3
-        
         with:
           apiToken: ${{ secrets.API_KEY }}
           accountId: ${{ secrets.ACCOUNT_ID }}
-      
-
+          command: deploy --env production
